@@ -1,147 +1,87 @@
 require 'image'
 require 'nn'
 
-local numOfImages = 200;
-local imageAll = torch.Tensor(3*numOfImages,3,227,227)
-local labelAll = torch.Tensor(3*numOfImages)
+local numOfImages = 300;
 local batchSize = 100
+local trSize = 3*numOfImages
+
+AllImages = {}
+AllLabels = {}
 classes = {'left','up','right'}
 print(classes[1])
 local j = 0
 local i=0
-while 1 do
-   i=i+1
-   local name = 'data/train/Left_screenshot'..i..'_1.png'
-   local f= io.open(name, "r")
-   if f==nil then j=j+1
-   else
-	  im = image.load(name);
-    im = image.scale(im, 227, 227, 'bilinear');
-    imageAll[i-j] = im;
-	  labelAll[i-j] = 1;
-   end
-   if (i-j)==numOfImages then break end
+local count = 0
+
+local n = 'label_trainX.txt'
+local file= io.open(n, "r")
+if file then
+  for line in file:lines() do
+      local name = line
+      i = i+1
+      local f = io.open(name, "r")
+      if f==nil then j=j+1
+      else
+        count = count + 1
+        AllImages[count] = name;
+        print(AllImages[count])
+        AllLabels[count] = 1;
+      end
+      if (i-j)==numOfImages then break end
+  end
 end
 print(j)
 
-local j=0
+print(classes[2])
+local j = 0
 local i=0
-while 1 do
-   i=i+1
-   local name = 'data/train/Up_screenshot'..i..'_1.png'
-   local f= io.open(name, "r")
-   if f==nil then j=j+1
-   else
-     im = image.load(name);
-     im = image.scale(im, 227, 227, 'bilinear');
-     imageAll[i + numOfImages-j] = im;
-     labelAll[i + numOfImages-j] = 2;
-   end
-   if (i-j)==numOfImages then break end
+
+local n = 'label_trainY.txt'
+local file= io.open(n, "r")
+if file then
+  for line in file:lines() do
+      local name = line
+      i = i+1
+      local f = io.open(name, "r")
+      if f==nil then 
+        j=j+1
+      else
+        count = count + 1
+        AllImages[count] = name;
+        AllLabels[count] = 2;
+      end
+      if (i-j)==numOfImages then 
+        break end
+  end
 end
 
-local j =0
+print(j)
+
+print(classes[3])
+local j = 0
 local i=0
-while 1 do
-   i=i+1
-   local name = 'data/train/Right_screenshot'..i..'_1.png'
-   local f= io.open(name, "r")
-   if f==nil then j=j+1
-   else
-      im = image.load(name);
-      im = image.scale(im, 227, 227, 'bilinear');
-      imageAll[2*numOfImages+i-j] = im;
-      labelAll[2*numOfImages+i-j] = 3;
-   end
-   if (i-j)==numOfImages then break end
+
+local n = 'label_trainZ.txt'
+local file= io.open(n, "r")
+if file then
+  for line in file:lines() do
+      local name = line
+      i = i+1
+      local f = io.open(name, "r")
+      if f==nil then j=j+1
+      else
+        count = count + 1
+        AllImages[count] = name;
+        AllLabels[count] = 3;
+        --print(AllLabels[count])
+      end
+      if (i-j)==numOfImages then break end
+  end
 end
 
-for i=1,3*numOfImages do
-   if labelAll[i]<1 then print(i) end
-   if labelAll[i]>3 then print('>3'..i)
-   end
-end
-
-local labelsShuffle = torch.randperm((#labelAll)[1])
-
-local portionTrain = 0.9 	--90% data is trained
-local trSize = torch.floor(labelsShuffle:size(1)*portionTrain)
-local teSize = labelsShuffle:size(1) - trSize
-
-trainData = {
-	data = torch.Tensor(trSize,3,227,227),
-	labels = torch.Tensor(trSize),
-	size = function() return trSize end
-}
-
-testData = {
-	data = torch.Tensor(teSize,3,227,227),
-	labels = torch.Tensor(teSize),
-	size = function() return teSize end
-}
-
-for i=1,trSize do
-	trainData.data[i] = imageAll[labelsShuffle[i]]:clone()
-	trainData.labels[i] = labelAll[labelsShuffle[i]]
-end
-
-for i=trSize+1,trSize+teSize do
-	testData.data[i-trSize] = imageAll[labelsShuffle[i]]:clone()
-	testData.labels[i-trSize] = labelAll[labelsShuffle[i]]
-end
+print(j)
 
 
-setmetatable(trainData,
-    {__index = function(t, i)
-                    return {t.data[i], t.labels[i]}
-                end}
-);
-trainData.data = trainData.data:double()
-
-function trainData:size()
-    return self.data:size(1)
-end
-
-local mean = {}
-local std = {}
-
-for i=1,3 do
-   -- normalize each channel globally:
-   mean[i] = trainData.data[{ {},i,{},{} }]:mean()
-   std[i] = trainData.data[{ {},i,{},{} }]:std()
-   trainData.data[{ {},i,{},{} }]:add(-mean[i])
-   trainData.data[{ {},i,{},{} }]:div(std[i])
-end
-
-for i=1,3 do
-   -- normalize each channel globally:
-   testData.data[{ {},i,{},{} }]:add(-mean[i])
-   testData.data[{ {},i,{},{} }]:div(std[i])
-end
-
-print(sys.COLORS.red ..  '==> preprocessing data: normalize all three channels locally')
-
-for i=1,3 do
-   local trainMean = trainData.data[{ {},i }]:mean()
-   local trainStd = trainData.data[{ {},i }]:std()
-
-   local testMean = testData.data[{ {},i }]:mean()
-   local testStd = testData.data[{ {},i }]:std()
-
-   print('training data, '..i..'-channel, mean: ' .. trainMean)
-   print('training data, '..i..'-channel, standard deviation: ' .. trainStd)
-
-   print('test data, '..i..'-channel, mean: ' .. testMean)
-   print('test data, '..i..'-channel, standard deviation: ' .. testStd)
-end
-
--- visualtisation part may be deleted. check before final run
---if opt.visualize then
---   local first256Samples_y = trainData.data[{ {1,256},1 }]
---   image.display{image=first256Samples_y, nrow=16, legend='Some training examples: Y channel'}
---   local first256Samples_y = testData.data[{ {1,256},1 }]
---   image.display{image=first256Samples_y, nrow=16, legend='Some testing examples: Y channel'}
---end
 
 
 model = nn.Sequential()
@@ -195,7 +135,7 @@ trainer = nn.StochasticGradient(model,criterion)
 trainer.learningRate = 0.002
 trainer.learningRateDecay = 1
 trainer.shuffleIndices = 0
-trainer.maxIteration = 20
+trainer.maxIteration = 100
 torch.save("road_Alexnet_model.t7",model);
 --model = torch.load("road_Alexnet_model.t7");
 
@@ -204,22 +144,62 @@ local iteration =1;
 local currentLearningRate = trainer.learningRate;
 local input=torch.Tensor(batchSize,3,227,227);
 local target=torch.Tensor(batchSize);
+
+
+local mean = {}
+local sum = {0,0,0}
+local std = {}
+local counter = 0;
+local im=torch.Tensor(3, 227, 227);
+
+for i=1,trSize do
+  --print(AllImages[i])
+  print(i)
+  im = image.load(AllImages[i]);
+  for c=1,3 do
+    sum[c] = sum[c]+im[{c,{},{}}]:sum();
+  end
+  counter = counter+(227*227);
+end
+
+for c=1,3 do
+  mean[c] = sum[c]/counter;
+end
+
+sum = {0,0,0}
+for i=1, trSize do
+  im = image.load(AllImages[i]);
+  for c=1,3 do
+    im[{c,{},{}}]:add(-mean[c]);
+    sum[c] = sum[c]+im[{c,{},{}}]:pow(2):sum();
+  end
+end
+
+for c=1,3 do
+  std[c] = torch.sqrt(sum[c]/counter);
+end
+
+print("preprocessing done :)");
+
+
 while true do
   local currentError_ = 0
   for t = 1,(trSize/batchSize) do
     local currentError = 0;
     for t1 = 1,batchSize do
       t2 = (t-1)*batchSize+t1;
-      print("nigga")
-      print(labelsShuffle1[t2])
-      input[t1] = trainData.data[labelsShuffle1[t2]];
-      target[t1] = trainData.labels[labelsShuffle1[t2]]
+      --print(labelsShuffle1[t2])
+      im = image.load(AllImages[labelsShuffle1[t2]]);
+      im = image.scale(im, 227, 227, 'bilinear');
+      input[t1] = im:clone();
+      target[t1] = AllLabels[labelsShuffle1[t2]];
       for i=1,3 do
        -- normalize each channel globally:
        input[{{},i,{},{}}]:add(-mean[i])
        input[{{},i,{},{}}]:div(std[i])
       end
-      currentError = currentError + criterion:forward(model:forward(input[t1]), target[t1])
+      currentError = criterion:forward(model:forward(input[t1]), target[t1])
+      --print(currentError)
       currentError_ = currentError_ + currentError
       model:updateGradInput(input[t1], criterion:updateGradInput(model:forward(input[t1]), target[t1]))
       model:accUpdateGradParameters(input[t1], criterion.gradInput, currentLearningRate)
@@ -237,6 +217,8 @@ while true do
   end
 end
 
+
+--[[
 correct = 0
 class_perform = {0,0,0}
 class_size = {0,0,0}
@@ -256,3 +238,4 @@ print("Overall correct " .. correct .. " percentage correct" .. (100*correct/teS
 for i=1,#classes do
    print(classes[i], 100*class_perform[i]/class_size[i] .. " % ")
 end
+--]]
